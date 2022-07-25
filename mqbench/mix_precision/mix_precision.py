@@ -1,7 +1,6 @@
 from typing import Tuple
 
 from torch.nn import Module
-import numpy as np
 
 from mqbench.utils.logger import logger
 from mqbench.prepare_by_platform import prepare_by_platform, BackendType
@@ -23,21 +22,21 @@ def mixprecision_profiling(model: Module, quantized_model: Module, data: Tuple, 
     model_size = sum(list(layer_parameters_dict.values())) * 32 / 8 / 1024 / 1024
     logger.info("FP model size: {:.2f} MB".format(model_size))
 
-    if algo is 'hawq_eigen':
+    if algo == 'hawq_eigen':
         sensetive_dict = hawq(model, data, criterion, type='eigenvalues')
         # Do normalize.
         for layer, index in sensetive_dict.items():
             sensetive_dict[layer] = index / layer_parameters_dict[layer]
         for name, max_eignevalues in sensetive_dict.items():
             logger.info("Layer {} with max eigen values: {}".format(name, max_eignevalues))
-    elif algo is 'hawq_trace':
+    elif algo == 'hawq_trace':
         sensetive_dict = hawq(model, data, criterion, type='trace')
         # Do normalize.
         for layer, index in sensetive_dict.items():
             sensetive_dict[layer] = index / layer_parameters_dict[layer]
         for name, trace in sensetive_dict.items():
             logger.info("Layer {} with trace: {}".format(name, trace))
-    elif algo is 'naive':
+    elif algo == 'naive':
         sensetive_dict = prec_degradation_by_layer(model, quantized_model, data, criterion)
     else:
         logger.info("Unknown algorithm!")
@@ -139,7 +138,7 @@ def ILP_bit_selection(bitwidth_list, sensetive_dict, layer_parameters_dict, delt
             total_size.append(variable[f"x_{name}_{bit}"] * bit * params)
     prob += sum(total_size) <= model_size_constraints * 8 * 1024 * 1024
 
-    status = prob.solve(GLPK_CMD(msg=1, options=["--tmlim", "10000","--simplex"]))
+    status = prob.solve(GLPK_CMD(msg=1, options=["--tmlim", "10000", "--simplex"]))
     LpStatus[status]
     for layer_name in sensetive_dict:
         resigned = False
