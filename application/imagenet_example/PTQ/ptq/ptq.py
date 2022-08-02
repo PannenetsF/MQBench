@@ -2,6 +2,7 @@ import numpy as np
 import argparse
 from data.imagenet import load_data
 from models import load_model
+from dist_helper.dist import setup_distributed, DIST_BACKEND, env
 from utils import parse_config, seed_all, evaluate
 from mqbench.prepare_by_platform import prepare_by_platform, BackendType
 from mqbench.advanced_ptq import ptq_reconstruction
@@ -21,9 +22,11 @@ backend_dict = {
 
 def load_calibrate_data(train_loader, cali_batchsize):
     cali_data = []
+    data_idx_range = range(env.rank * cali_batchsize, (env.rank + 1) * cali_batchsize) # If bs is too large, there is a bug.
     for i, batch in enumerate(train_loader):
-        cali_data.append(batch[0])
-        if i + 1 == cali_batchsize:
+        if i in data_idx_range:
+            cali_data.append(batch[0])
+        if i >= data_idx_range[-1]:
             break
     return cali_data
 
@@ -57,6 +60,10 @@ if __name__ == '__main__':
     config = parse_config(args.config)
     # seed first
     seed_all(config.process.seed)
+    # setup dist 
+    if hasattr(config, 'dist'):
+        DIST_BACKEND.backend = config.dist.backend
+        setup_distributed(config.dist.port, config.dist.launch, config.dist.backend)
     # load_model
     model = load_model(config.model)
     if hasattr(config, 'quantize'):
